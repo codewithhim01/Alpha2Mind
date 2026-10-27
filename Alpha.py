@@ -65,61 +65,45 @@ except Exception as e:
 # ══════════════════════════════════════════════════════════════════════════════
 # MISTRAL AI  — tries every SDK variant, then raw HTTP, never crashes
 # ══════════════════════════════════════════════════════════════════════════════
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "enn9l0x84yuLLulUJHWzlACUKhCxkgCn")
-_mistral_call   = None
-is_speaking = False   # 🔥 prevents overlap + self listening
-def _setup_mistral():
-    global _mistral_call
 
-    # attempt 1 — mistralai >= 1.0
+# ══════════════════════════════════════════════════════════════════════════════
+# GROQ AI
+# ══════════════════════════════════════════════════════════════════════════════
+
+from groq import Groq
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
+_groq_call = None
+is_speaking = False
+
+
+def _setup_groq():
+    global _groq_call
+
+    if not GROQ_API_KEY:
+        print("✗ Groq AI disabled — set GROQ_API_KEY.")
+        return
+
     try:
-        mod = importlib.import_module("mistralai")
-        cls = getattr(mod, "Mistral", None)
-        if cls:
-            c = cls(api_key=MISTRAL_API_KEY)
-            _ = c.chat.complete   # probe
-            def _v1(msgs):
-                r = c.chat.complete(model="mistral-small-latest", messages=msgs,
-                                    max_tokens=80, temperature=0.7)
-                return r.choices[0].message.content.strip()
-            _mistral_call = _v1
-            print("✓ Mistral SDK v1"); return
-    except Exception: pass
+        client = Groq(api_key=GROQ_API_KEY)
 
-    # attempt 2 — mistralai 0.x
-    try:
-        mod = importlib.import_module("mistralai.client")
-        cls = getattr(mod, "MistralClient", None)
-        if cls:
-            c = cls(api_key=MISTRAL_API_KEY)
-            def _v0(msgs):
-                r = c.chat(model="mistral-small-latest", messages=msgs,
-                           max_tokens=80, temperature=0.7)
-                return r.choices[0].message.content.strip()
-            _mistral_call = _v0
-            print("✓ Mistral SDK v0"); return
-    except Exception: pass
+        def _call(messages):
+            response = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=messages,
+                max_tokens=120,
+                temperature=0.7,
+            )
+            return (response.choices[0].message.content or "").strip()
 
-    # attempt 3 — raw HTTP (always works, Anaconda has requests built-in)
-    try:
-        import requests as _req
-        def _http(msgs):
-            resp = _req.post(
-                "https://api.mistral.ai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {MISTRAL_API_KEY}",
-                         "Content-Type": "application/json"},
-                json={"model": "mistral-small-latest", "messages": msgs,
-                      "max_tokens": 80, "temperature": 0.7},
-                timeout=10)
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
-        _mistral_call = _http
-        print("✓ Mistral: raw HTTP requests"); return
-    except Exception: pass
+        _groq_call = _call
+        print("✓ Groq AI ready")
 
-    print("✗ Mistral AI disabled — no working SDK found.")
+    except Exception as e:
+        print(f"✗ Groq setup failed: {e}")
 
-_setup_mistral()
+
+_setup_groq()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -184,25 +168,42 @@ def wish():
 # ══════════════════════════════════════════════════════════════════════════════
 # AI RESPONSE
 # ══════════════════════════════════════════════════════════════════════════════
+
 def ai_reply(user_input: str) -> str:
-    if not _mistral_call:
-        return "AI is not configured. Please set your Mistral API key."
-    conversation_history.append({"role": "user", "content": user_input})
+    if not _groq_call:
+        return "Groq AI is not configured. Please set your Groq API key."
+
+    conversation_history.append({
+        "role": "user",
+        "content": user_input
+    })
     conversation_history[:] = conversation_history[-12:]
+
     messages = [
-        {"role": "system", "content":
-         "You are Alpha, an intelligent macOS voice assistant. "
-         "Reply in 1-2 short sentences unless asked for more."},
+        {
+            "role": "system",
+            "content": (
+                "You are Alpha, an intelligent macOS voice assistant. "
+                "Reply in 1-2 short sentences unless asked for more."
+            )
+        },
         *conversation_history,
     ]
+
     try:
-        text = _mistral_call(messages)
-        conversation_history.append({"role": "assistant", "content": text})
+        answer = _groq_call(messages)
+
+        conversation_history.append({
+            "role": "assistant",
+            "content": answer
+        })
         conversation_history[:] = conversation_history[-12:]
-        return text
+
+        return answer
+
     except Exception as e:
-        print(f"✗ AI: {e}")
-        return "I couldn't reach the AI. Check your API key and internet."
+        print(f"✗ Groq AI: {e}")
+        return "I couldn't reach Groq AI. Check your API key, usage limits, and internet."
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -620,19 +621,22 @@ def respond(text: str):
     global is_awake, file_exp_status
 
     text = text.strip().lower()
-    if not text: return
-    print(f"→ '{text}'")
-
-    try: app.eel.addUserMsg(text)
-    except: pass
-
-    # ── sleep gate ────────────────────────────────────────────────────────────
-    if not is_awake:
-        if "wake up" in text:
-            is_awake = True; wish()
+    if not text:
         return
 
-    # ── greet ─────────────────────────────────────────────────────────────────
+    print(f"→ '{text}'")
+
+    try:
+        app.eel.addUserMsg(text)
+    except Exception:
+        pass
+
+    if not is_awake:
+        if "wake up" in text:
+            is_awake = True
+            wish()
+        return
+
     if text in ("hello", "hi", "hey") or "hi alpha" in text or "hello alpha" in text:
         wish()
 
@@ -645,7 +649,6 @@ def respond(text: str):
     elif "time" in text:
         reply(datetime.datetime.now().strftime("%I:%M %p"))
 
-    # ── sleep / quit ──────────────────────────────────────────────────────────
     elif "sleep" in text or text in ("bye", "goodbye"):
         is_awake = False
         reply("Going to sleep. Say 'wake up' to resume.")
@@ -653,28 +656,22 @@ def respond(text: str):
     elif any(w in text for w in QUIT_WORDS):
         quit_alpha()
 
-    # ── camera commands ───────────────────────────────────────────────────────
-    elif "take photo" in text or "take a photo" in text or \
-         "take snapshot" in text or "take picture" in text:
+    elif "take photo" in text or "take a photo" in text or "take snapshot" in text or "take picture" in text:
         cmd_take_snapshot()
 
-    elif "face detection" in text or "detect face" in text or \
-         "start face" in text or "face detect" in text:
+    elif "face detection" in text or "detect face" in text or "start face" in text or "face detect" in text:
         cmd_face_detection()
 
-    elif "blink" in text and "detect" in text or "blink detector" in text:
+    elif ("blink" in text and "detect" in text) or "blink detector" in text:
         cmd_blink_detector()
 
     elif "stop camera" in text or "close camera" in text:
         cmd_stop_camera()
 
-    # ── gesture mouse commands ────────────────────────────────────────────────
-    elif "gesture mouse" in text or "hand mouse" in text or \
-         "start mouse" in text or "mouse gesture" in text:
+    elif "gesture mouse" in text or "hand mouse" in text or "start mouse" in text or "mouse gesture" in text:
         cmd_gesture_mouse()
 
-    elif "air typing" in text or "air keyboard" in text or \
-         "hand typing" in text or "gesture typing" in text:
+    elif "air typing" in text or "air keyboard" in text or "hand typing" in text or "gesture typing" in text:
         cmd_air_typing()
 
     elif "stop mouse" in text or "stop gesture mouse" in text:
@@ -683,7 +680,6 @@ def respond(text: str):
     elif "what did i type" in text or "read typed" in text or "what i typed" in text:
         cmd_read_typed()
 
-    # ── gesture keyboard ──────────────────────────────────────────────────────
     elif "gesture keyboard" in text or "hand keyboard" in text or "air keyboard" in text:
         cmd_gesture_keyboard()
 
@@ -705,7 +701,6 @@ def respond(text: str):
     elif "clear gesture" in text or "clear keyboard" in text:
         cmd_clear_gesture_text()
 
-    # ── gesture controller (original full) ───────────────────────────────────
     elif "start gesture" in text or "launch gesture" in text or "gesture on" in text:
         cmd_gesture_controller()
 
@@ -721,56 +716,75 @@ def respond(text: str):
             "Typing: say air typing to open the virtual keyboard."
         )
 
-    # ── apps ──────────────────────────────────────────────────────────────────
     elif "open chrome" in text or "open google chrome" in text:
         open_app("Google Chrome") and reply("Opening Chrome.")
+
     elif "open safari" in text:
         open_app("Safari") and reply("Opening Safari.")
+
     elif "open spotify" in text:
         open_app("Spotify") and reply("Opening Spotify.")
+
     elif "open vs code" in text or "open vscode" in text or "open visual studio" in text:
         open_app("Visual Studio Code") and reply("Opening VS Code.")
+
     elif "open calculator" in text:
         open_app("Calculator") and reply("Opening Calculator.")
+
     elif "open calendar" in text:
         open_app("Calendar") and reply("Opening Calendar.")
+
     elif "open notes" in text:
         open_app("Notes") and reply("Opening Notes.")
+
     elif "open terminal" in text:
         open_app("Terminal") and reply("Opening Terminal.")
+
     elif "open finder" in text:
         open_app("Finder") and reply("Opening Finder.")
+
     elif "open mail" in text:
         open_app("Mail") and reply("Opening Mail.")
+
     elif "open maps" in text:
         open_app("Maps") and reply("Opening Maps.")
+
     elif "open messages" in text:
         open_app("Messages") and reply("Opening Messages.")
+
     elif "open facetime" in text:
         open_app("FaceTime") and reply("Opening FaceTime.")
+
     elif "open whatsapp chat" in text:
         name = text.split(" of ")[-1].strip() if " of " in text else \
                text.split(" for ")[-1].strip() if " for " in text else None
-        if name: open_whatsapp_chat(name)
-        else: reply("Who should I open a chat with?")
+        if name:
+            open_whatsapp_chat(name)
+        else:
+            reply("Who should I open a chat with?")
+
     elif "open whatsapp" in text:
         if not open_app("WhatsApp"):
             webbrowser.open("https://web.whatsapp.com")
             reply("Opening WhatsApp Web.")
-        else: reply("Opening WhatsApp.")
+        else:
+            reply("Opening WhatsApp.")
+
     elif text.startswith("open "):
         name = text[5:].strip().title()
-        if name and open_app(name): reply(f"Opening {name}.")
+        if name and open_app(name):
+            reply(f"Opening {name}.")
 
-    # ── web ───────────────────────────────────────────────────────────────────
     elif "search" in text:
         q = text.replace("search", "").strip()
         webbrowser.open(f"https://google.com/search?q={urllib.parse.quote(q)}")
         reply(f"Searching for {q}.")
+
     elif "youtube" in text:
         q = text.replace("youtube", "").replace("play", "").strip()
         webbrowser.open(f"https://youtube.com/results?search_query={urllib.parse.quote(q)}")
         reply(f"Opening YouTube for {q}.")
+
     elif "location" in text or ("show" in text and "map" in text):
         reply("Which place?")
         place = record_audio()
@@ -778,60 +792,88 @@ def respond(text: str):
             webbrowser.open(f"https://www.google.com/maps/place/{urllib.parse.quote(place)}")
             reply(f"Showing {place} on Maps.")
 
-    # ── keyboard ──────────────────────────────────────────────────────────────
-    elif "copy" in text:            kb_copy()
-    elif "paste" in text:           kb_paste()
-    elif "redo" in text:            kb_redo()
-    elif "undo" in text:            kb_undo()
-    elif "select all" in text:      kb_select_all()
-    elif "save" in text:            kb_save()
-    elif "new tab" in text:         kb_new_tab()
-    elif "close tab" in text:       kb_close_tab()
-    elif "screenshot" in text:      kb_screenshot()
-    elif "spotlight" in text:       kb_spotlight()
-    elif "mission control" in text: kb_mission_ctrl()
+    elif "copy" in text:
+        kb_copy()
 
-    # ── volume / system ───────────────────────────────────────────────────────
-    elif "unmute" in text:  unmute()
-    elif "mute" in text:    mute()
+    elif "paste" in text:
+        kb_paste()
+
+    elif "redo" in text:
+        kb_redo()
+
+    elif "undo" in text:
+        kb_undo()
+
+    elif "select all" in text:
+        kb_select_all()
+
+    elif "save" in text:
+        kb_save()
+
+    elif "new tab" in text:
+        kb_new_tab()
+
+    elif "close tab" in text:
+        kb_close_tab()
+
+    elif "screenshot" in text:
+        kb_screenshot()
+
+    elif "spotlight" in text:
+        kb_spotlight()
+
+    elif "mission control" in text:
+        kb_mission_ctrl()
+
+    elif "unmute" in text:
+        unmute()
+
+    elif "mute" in text:
+        mute()
+
     elif "volume" in text:
         nums = [w for w in text.split() if w.isdigit()]
-        if nums: set_volume(int(nums[0]))
-        else: reply("Say a number, e.g. 'volume 50'.")
-    elif "lock screen" in text or "lock the screen" in text: lock_screen()
-    elif "empty trash" in text: empty_trash()
+        if nums:
+            set_volume(int(nums[0]))
+        else:
+            reply("Say a number, e.g. 'volume 50'.")
 
-    # ── code ──────────────────────────────────────────────────────────────────
+    elif "lock screen" in text or "lock the screen" in text:
+        lock_screen()
+
+    elif "empty trash" in text:
+        empty_trash()
+
     elif "run code" in text or "run python" in text or "run file" in text:
         run_code_in_vscode()
 
-    # ── file explorer ─────────────────────────────────────────────────────────
     elif "list files" in text or text == "list":
         list_files()
+
     elif file_exp_status:
         if "back" in text:
             explorer_back()
         elif "close" in text:
-            file_exp_status = False; reply("File explorer closed.")
+            file_exp_status = False
+            reply("File explorer closed.")
         else:
             nums = [w for w in text.split() if w.isdigit()]
-            if nums: explorer_open(nums[0])
-            else: reply("Say a number to open, 'back', or 'close'.")
+            if nums:
+                explorer_open(nums[0])
+            else:
+                reply("Say a number to open, 'back', or 'close'.")
 
-    # ── AI fallback ───────────────────────────────────────────────────────────
-  
     else:
         processed = gali(text)
 
-    # if command matched → direct reply
-    if processed != text:
-        reply(processed)
-    else:
-        ai_text = ai_reply(text)
-        if ai_text:
-            reply(ai_text)
-
-
+        if processed != text:
+            reply(processed)
+        else:
+            ai_text = ai_reply(text)
+            if ai_text:
+                reply(ai_text)
+            else:
+                reply("I couldn't generate a response. Please try again.")
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
