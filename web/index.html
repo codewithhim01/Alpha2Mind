@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha</title>
+    <script type="text/javascript" src="/eel.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:        #080b10;
+            --surface:   #0d1117;
+            --surface2:  #111820;
+            --border:    rgba(0, 210, 180, 0.12);
+            --border2:   rgba(0, 210, 180, 0.25);
+            --accent:    #00d2b4;
+            --accent2:   #0077ff;
+            --accent-dim: rgba(0, 210, 180, 0.08);
+            --accent2-dim: rgba(0, 119, 255, 0.08);
+            --text:      #e8edf5;
+            --muted:     #4a5568;
+            --muted2:    #2d3748;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Syne', sans-serif;
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Subtle grid texture */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,210,180,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,210,180,0.025) 1px, transparent 1px);
+            background-size: 48px 48px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Corner accent glow */
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -80px;
+            right: -80px;
+            width: 360px;
+            height: 360px;
+            background: radial-gradient(circle, rgba(0,119,255,0.06) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ============ HEADER ============ */
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            background: rgba(8, 11, 16, 0.96);
+            backdrop-filter: blur(12px);
+        }
+
+        .header-left { display: flex; align-items: center; gap: 14px; }
+
+        /* Diamond logo */
+        .alpha-gem {
+            width: 34px;
+            height: 34px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .alpha-gem svg {
+            width: 34px;
+            height: 34px;
+            animation: gem-spin 8s linear infinite;
+        }
+        @keyframes gem-spin {
+            0%   { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .header-titles { display: flex; flex-direction: column; }
+        .header-name {
+            font-family: 'Syne', sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 6px;
+            color: var(--accent);
+            line-height: 1;
+        }
+        .header-sub {
+            font-family: 'DM Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+
+        .header-right { display: flex; align-items: center; gap: 20px; }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border: 1px solid var(--border2);
+            border-radius: 20px;
+            background: var(--accent-dim);
+        }
+        .status-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--accent);
+            animation: breathe 2.5s ease-in-out infinite;
+        }
+        @keyframes breathe {
+            0%,100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: 0.35; transform: scale(0.6); }
+        }
+        .status-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--accent);
+        }
+
+        /* Gesture/Voice mini indicators */
+        .sys-indicators { display: flex; gap: 8px; }
+        .sys-badge {
+            font-family: 'DM Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        .sys-badge.active {
+            border-color: var(--border2);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        /* ============ MESSAGES ============ */
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+            scroll-behavior: smooth;
+        }
+
+        #messages::-webkit-scrollbar { width: 3px; }
+        #messages::-webkit-scrollbar-track { background: transparent; }
+        #messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+        .message {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            animation: msg-in 0.28s cubic-bezier(0.2, 0, 0, 1) both;
+            max-width: 82%;
+        }
+        @keyframes msg-in {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user-message { align-self: flex-end; flex-direction: row-reverse; }
+        .message.app-message  { align-self: flex-start; }
+
+        .avatar {
+            width: 28px; height: 28px;
+            border-radius: 7px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px; font-weight: 500;
+            flex-shrink: 0;
+        }
+        .av-alpha {
+            background: var(--accent-dim);
+            border: 1px solid var(--border2);
+            color: var(--accent);
+        }
+        .av-user {
+            background: var(--accent2-dim);
+            border: 1px solid rgba(0,119,255,0.3);
+            color: var(--accent2);
+        }
+
+        .msg-col { display: flex; flex-direction: column; }
+        .user-message .msg-col { align-items: flex-end; }
+
+        .bubble {
+            padding: 9px 15px;
+            font-size: 13.5px;
+            line-height: 1.65;
+            font-weight: 400;
+            word-wrap: break-word;
+            max-width: 100%;
+            font-family: 'Syne', sans-serif;
+        }
+        .app-message .bubble {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 4px 14px 14px 14px;
+            color: var(--text);
+        }
+        .user-message .bubble {
+            background: rgba(0, 119, 255, 0.08);
+            border: 1px solid rgba(0, 119, 255, 0.2);
+            border-radius: 14px 4px 14px 14px;
+            color: var(--text);
+        }
+
+        .msg-time {
+            font-family: 'DM Mono', monospace;
+            font-size: 9px;
+            color: var(--muted);
+            letter-spacing: 1px;
+            margin-top: 4px;
+            padding: 0 3px;
+        }
+
+        /* ============ TYPING ============ */
+        .typing-wrap {
+            padding: 0 24px 2px;
+            position: relative;
+            z-index: 1;
+        }
+        .typing-row {
+            display: none;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        .typing-row.show { display: flex; }
+        .typing-dots {
+            display: flex; gap: 5px;
+            padding: 10px 15px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 4px 14px 14px 14px;
+        }
+        .typing-dots span {
+            width: 5px; height: 5px; border-radius: 50%;
+            background: var(--accent);
+            animation: dot-bounce 1.3s ease-in-out infinite;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.18s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.36s; }
+        @keyframes dot-bounce {
+            0%,100% { opacity: 0.25; transform: translateY(0); }
+            50%      { opacity: 1;    transform: translateY(-5px); }
+        }
+
+        /* ============ INPUT ============ */
+        .input-area {
+            position: relative;
+            z-index: 10;
+            padding: 12px 24px 18px;
+            border-top: 1px solid var(--border);
+            background: rgba(8, 11, 16, 0.97);
+            backdrop-filter: blur(12px);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #userInput {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 11px 16px;
+            color: var(--text);
+            font-family: 'Syne', sans-serif;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+            letter-spacing: 0.3px;
+        }
+        #userInput::placeholder { color: var(--muted); font-size: 12px; }
+        #userInput:focus {
+            border-color: var(--accent);
+        }
+
+        #sendBtn {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            border: 1px solid var(--border2);
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s, transform 0.1s;
+            flex-shrink: 0;
+        }
+        #sendBtn:hover { background: rgba(0, 210, 180, 0.18); }
+        #sendBtn:active { transform: scale(0.93); }
+
+        /* Mic button */
+        #micBtn {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--muted);
+            font-size: 15px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        #micBtn:hover { border-color: var(--border2); color: var(--accent); }
+        #micBtn.listening {
+            border-color: rgba(255, 60, 60, 0.5);
+            background: rgba(255, 60, 60, 0.08);
+            color: #ff4444;
+            animation: mic-pulse 1s ease-in-out infinite;
+        }
+        @keyframes mic-pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(255,60,60,0.2); }
+            50%      { box-shadow: 0 0 0 6px rgba(255,60,60,0); }
+        }
+
+        /* Quick commands */
+        .quick-cmds {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .qcmd {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            padding: 3px 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: transparent;
+        }
+        .qcmd:hover {
+            color: var(--accent);
+            border-color: var(--border2);
+            background: var(--accent-dim);
+        }
+
+        /* ============ WELCOME ============ */
+        .welcome {
+            text-align: center;
+            padding: 48px 20px;
+            flex: 0 0 auto;
+        }
+        .welcome-gem {
+            margin: 0 auto 20px;
+            width: 60px; height: 60px;
+        }
+        .welcome-gem svg {
+            width: 60px; height: 60px;
+            animation: gem-spin 8s linear infinite;
+        }
+        .welcome h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: 15px; font-weight: 800;
+            letter-spacing: 8px;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+        .welcome p {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 1px;
+            line-height: 2;
+        }
+        .welcome-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 22px;
+            max-width: 520px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .welcome-chip {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: var(--surface2);
+        }
+        .welcome-chip:hover {
+            color: var(--accent);
+            border-color: var(--border2);
+            background: var(--accent-dim);
+        }
+        .chip-icon {
+            font-size: 16px;
+            display: block;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+    <div class="header-left">
+        <div class="alpha-gem">
+            <svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="17,2 32,17 17,32 2,17"
+                    fill="none" stroke="#00d2b4" stroke-width="1.5" opacity="0.9"/>
+                <polygon points="17,7 28,17 17,27 6,17"
+                    fill="rgba(0,210,180,0.08)" stroke="#00d2b4" stroke-width="0.8" opacity="0.6"/>
+                <circle cx="17" cy="17" r="2.5" fill="#00d2b4" opacity="0.9"/>
+            </svg>
+        </div>
+        <div class="header-titles">
+            <div class="header-name">ALPHA</div>
+            <div class="header-sub">AI · Voice · Gesture · macOS</div>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="sys-indicators">
+            <div class="sys-badge active" id="voiceBadge">🎤 Voice</div>
+            <div class="sys-badge" id="gestureBadge">✋ Gesture</div>
+            <div class="sys-badge active" id="aiBadge">⚡ AI</div>
+        </div>
+        <div class="status-pill">
+            <div class="status-dot"></div>
+            <div class="status-label">ONLINE</div>
+        </div>
+    </div>
+</header>
+
+<!-- MESSAGES -->
+<div id="messages">
+    <div class="welcome" id="welcomeScreen">
+        <div class="welcome-gem">
+            <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="30,3 57,30 30,57 3,30"
+                    fill="none" stroke="#00d2b4" stroke-width="1.5" opacity="0.85"/>
+                <polygon points="30,12 49,30 30,48 11,30"
+                    fill="rgba(0,210,180,0.07)" stroke="#00d2b4" stroke-width="0.8" opacity="0.5"/>
+                <circle cx="30" cy="30" r="4" fill="#00d2b4" opacity="0.9"/>
+            </svg>
+        </div>
+        <h2>ALPHA ONLINE</h2>
+        <p>Voice · Gesture · AI — All systems ready.<br>Say a command or type below.</p>
+        <div class="welcome-grid">
+            <div class="welcome-chip" onclick="sendQuick('hello')">
+                <span class="chip-icon">👋</span>greet
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('start gesture')">
+                <span class="chip-icon">✋</span>gesture
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('what time is it')">
+                <span class="chip-icon">🕐</span>time
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('open chrome')">
+                <span class="chip-icon">🌐</span>chrome
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('open spotify')">
+                <span class="chip-icon">🎵</span>spotify
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('take screenshot')">
+                <span class="chip-icon">📸</span>screenshot
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('search latest AI news')">
+                <span class="chip-icon">🔍</span>search
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('mute')">
+                <span class="chip-icon">🔇</span>mute
+            </div>
+            <div class="welcome-chip" onclick="sendQuick('gesture help')">
+                <span class="chip-icon">❓</span>help
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TYPING INDICATOR -->
+<div class="typing-wrap">
+    <div class="typing-row" id="typingRow">
+        <div class="avatar av-alpha">A</div>
+        <div class="typing-dots">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+</div>
+
+<!-- INPUT AREA -->
+<div class="input-area">
+    <div class="input-row">
+        <button id="micBtn" title="Click to use browser mic (visual only)">🎤</button>
+        <input type="text" id="userInput" placeholder="Type a command or question..." autocomplete="off" />
+        <button id="sendBtn" title="Send">▶</button>
+    </div>
+    <div class="quick-cmds">
+        <button class="qcmd" onclick="sendQuick('open chrome')">chrome</button>
+        <button class="qcmd" onclick="sendQuick('start gesture')">gesture on</button>
+        <button class="qcmd" onclick="sendQuick('stop gesture')">gesture off</button>
+        <button class="qcmd" onclick="sendQuick('take screenshot')">screenshot</button>
+        <button class="qcmd" onclick="sendQuick('copy')">copy</button>
+        <button class="qcmd" onclick="sendQuick('paste')">paste</button>
+        <button class="qcmd" onclick="sendQuick('lock screen')">lock</button>
+        <button class="qcmd" onclick="sendQuick('list files')">files</button>
+        <button class="qcmd" onclick="sendQuick('volume 50')">vol 50</button>
+        <button class="qcmd" onclick="sendQuick('mute')">mute</button>
+    </div>
+</div>
+
+<script type="text/javascript">
+
+    // ---- EEL: receive message from Python ----
+    eel.expose(addAppMsg);
+    function addAppMsg(msg) {
+        removeWelcome();
+        hideTyping();
+        appendMsg(msg, 'app-message', 'av-alpha', 'A');
+    }
+
+    // ---- Add user message visually ----
+    function addUserMsgUI(msg) {
+        removeWelcome();
+        appendMsg(msg, 'user-message', 'av-user', 'U');
+        showTyping();
+    }
+
+    function appendMsg(text, cls, avClass, avLetter) {
+        const msgs = document.getElementById('messages');
+        const t = getTime();
+        const row = document.createElement('div');
+        row.className = 'message ' + cls;
+        row.innerHTML = `
+            <div class="avatar ${avClass}">${avLetter}</div>
+            <div class="msg-col">
+                <div class="bubble">${text}</div>
+                <div class="msg-time">${t}</div>
+            </div>`;
+        msgs.appendChild(row);
+        scrollBottom();
+    }
+
+    function getTime() {
+        return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function scrollBottom() {
+        const m = document.getElementById('messages');
+        m.scrollTop = m.scrollHeight;
+    }
+
+    function showTyping() {
+        document.getElementById('typingRow').classList.add('show');
+        scrollBottom();
+    }
+
+    function hideTyping() {
+        document.getElementById('typingRow').classList.remove('show');
+    }
+
+    function removeWelcome() {
+        const w = document.getElementById('welcomeScreen');
+        if (w) w.remove();
+    }
+
+    // ---- Send message ----
+    function sendMessage() {
+        const inp = document.getElementById('userInput');
+        const msg = inp.value.trim();
+        if (!msg) return;
+        addUserMsgUI(msg);
+        eel.addUserMsg(msg);
+        inp.value = '';
+        // Update gesture badge if gesture command
+        if (msg.includes('gesture')) updateGestureBadge(msg);
+    }
+
+    function sendQuick(cmd) {
+        document.getElementById('userInput').value = cmd;
+        sendMessage();
+    }
+
+    // ---- Gesture badge toggle ----
+    function updateGestureBadge(msg) {
+        const badge = document.getElementById('gestureBadge');
+        if (msg.includes('start') || msg.includes('launch') || msg.includes('on')) {
+            badge.classList.add('active');
+        } else if (msg.includes('stop') || msg.includes('off')) {
+            badge.classList.remove('active');
+        }
+    }
+
+    // ---- Mic button (visual toggle — actual voice is handled by Python) ----
+    const micBtn = document.getElementById('micBtn');
+    let micActive = false;
+    micBtn.addEventListener('click', () => {
+        micActive = !micActive;
+        micBtn.classList.toggle('listening', micActive);
+        // Alpha.py handles real mic via SpeechRecognition continuously
+        // This button just gives visual feedback
+        if (micActive) {
+            addUserMsgUI('[Listening via mic — Python backend is recording]');
+            eel.addUserMsg('mic status check');
+        }
+        setTimeout(() => {
+            micActive = false;
+            micBtn.classList.remove('listening');
+        }, 2500);
+    });
+
+    // ---- Event listeners ----
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+    document.getElementById('userInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    // ---- Notify Python that UI is ready ----
+    document.addEventListener('DOMContentLoaded', function() {
+        eel.notifyStarted();
+    });
+
+</script>
+
+</body>
+</html>
